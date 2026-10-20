@@ -70,6 +70,8 @@
         typeChange: 3,    // vakttype skifter midt i en arbeidsperiode
         fairness: 2,      // skjev fordeling av netter/helger
         preferWith: 3,    // bonus når foretrukne kolleger jobber sammen
+        avoidWith: 6,     // straff når kolleger som helst ikke bør jobbe sammen får samme vakt
+        slotPref: 8,      // ønskelig (ikke påkrevd) sammensetning på en vakt, f.eks. «bør ha en mann»
       },
     };
   }
@@ -111,7 +113,7 @@
       const e = empById[a.employeeId];
       if (!e) continue;
       const planned = a.type !== 'syk';
-      const typeName = ({ ferie: 'ferie', syk: 'sykefravær', permisjon: 'permisjon', kurs: 'kurs', annet: 'fravær' })[a.type] || 'fravær';
+      const typeName = ({ ferie: 'ferie', syk: 'sykmelding', permisjon: 'permisjon', kurs: 'kurs', annet: 'fravær' })[a.type] || 'fravær';
       let d0 = Math.round((parseISO(a.from) - parseISO(start)) / 86400000);
       let d1 = Math.round((parseISO(a.to) - parseISO(start)) / 86400000);
       for (let d = Math.max(0, d0); d <= Math.min(days - 1, d1); d++) {
@@ -127,9 +129,46 @@
     const R = Object.assign(defaultRules(), rules || {});
     R.weights = Object.assign(defaultRules().weights, (rules && rules.weights) || {});
 
-    function demandAt(d, s) {
+    // temporary limitations: a tag (competence/ability) that does not apply in a period, e.g. pregnancy
+    const tagBreakAt = {};   // tagBreakAt[empId][d] = Set of tags that do not apply that day
+    for (const emp of employees) for (const b of (emp.tagBreaks || [])) {
+      if (!b.tag || !b.from) continue;
+      const d0 = Math.round((parseISO(b.from) - parseISO(start)) / 86400000);
+      const d1 = b.to ? Math.round((parseISO(b.to) - parseISO(start)) / 86400000) : days - 1;
+      for (let d = Math.max(0, d0); d <= Math.min(days - 1, d1); d++) {
+        const row = tagBreakAt[emp.id] = tagBreakAt[emp.id] || {};
+        (row[d] = row[d] || new Set()).add(b.tag);
+      }
+    }
+    function hasTagOn(emp, tag, d) {
+      if (!(emp.tags || []).includes(tag)) return false;
+      const row = tagBreakAt[emp.id];
+      return !(row && row[d] && row[d].has(tag));
+    }
+
+    // dispensations: a requirement waived for one specific shift (date + shift type), decided by the manager
+    const dispAt = {};
+    for (const x of (model.dispensations || [])) {
+      const d = Math.round((parseISO(x.date) - parseISO(start)) / 86400000);
+      if (d < 0 || d >= days) continue;
+      (dispAt[d + ':' + x.shift] = dispAt[d + ':' + x.shift] || []).push(x);
+    }
+    const baseDemandAt = (d, s) => {
       const key = dayInfo[d].weekend ? 'weekend' : 'weekday';
       return (demand[key] && demand[key][s]) || { min: 0, max: 0, tags: {}, minK: 0, minM: 0 };
+    };
+    function demandAt(d, s) {
+      const base = baseDemandAt(d, s);
+      const disp = dispAt[d + ':' + s];
+      if (!disp) return base;
+      const out = Object.assign({}, base, { tags: Object.assign({}, base.tags || {}), waived: disp });
+      for (const x of disp) {
+        if (x.what === 'min') out.min = Math.max(0, out.min - 1);
+        else if (x.what === 'genderK') out.minK = 0;
+        else if (x.what === 'genderM') out.minM = 0;
+        else if (x.what.startsWith('tag:')) { const t = x.what.slice(4); out.tags[t] = Math.max(0, (out.tags[t] || 0) - 1); }
+      }
+      return out;
     }
     // Weekend work: Saturday (any shift), Sunday day/evening, Friday night (ends Saturday).
     // Sunday night ends on Monday and belongs to the coming week unless the rules say otherwise.
@@ -151,19 +190,24 @@
       if (s.isNight) totalNight += dem.min;
       if (isWeekendShift(d, s.id)) totalWeekend += dem.min;
     }
+    // Expected share of nights / weekend shifts. Weekend-only staff put all their hours into weekends,
+    // so their expectation is their full contracted shift count; the rest is shared by percent and frequency.
+    const avgShiftHours = shifts.reduce((a, s) => a + s.hours, 0) / Math.max(1, shifts.length);
     const nightCap = employees.filter(e => canShift(e, shifts.filter(s => s.isNight).map(s => s.id)));
     const sumNightPct = nightCap.reduce((a, e) => a + e.percent, 0) || 1;
-    const wkCap = employees.filter(e => !e.noWeekends);
-    const sumWkPct = wkCap.reduce((a, e) => a + e.percent, 0) || 1;
     const fair = {};
+    let wkLeft = totalWeekend;
+    for (const e of employees) if (e.onlyWeekends) { fair[e.id] = { weekend: targetHours(e) / avgShiftHours }; wkLeft -= fair[e.id].weekend; }
+    const wkCap = employees.filter(e => !e.noWeekends && !e.onlyWeekends);
+    const wkWeight = e => e.percent / weekendEveryFor(e);
+    const sumWkW = wkCap.reduce((a, e) => a + wkWeight(e), 0) || 1;
     for (const e of employees) {
-      fair[e.id] = {
-        nights: nightCap.includes(e) ? totalNight * e.percent / sumNightPct : 0,
-        weekend: wkCap.includes(e) ? totalWeekend * e.percent / sumWkPct : 0,
-      };
+      fair[e.id] = fair[e.id] || {};
+      fair[e.id].nights = nightCap.includes(e) ? totalNight * e.percent / sumNightPct : 0;
+      if (fair[e.id].weekend == null) fair[e.id].weekend = wkCap.includes(e) ? Math.max(0, wkLeft) * wkWeight(e) / sumWkW : 0;
     }
 
-    return { model, settings, employees, empById, shifts, shiftById, demand, rules: R, weeks, days, dayInfo, absAt, wishAt, demandAt, isWeekendShift, weekendEveryFor, targetHours, fair, start };
+    return { model, settings, employees, empById, shifts, shiftById, demand, rules: R, weeks, days, dayInfo, absAt, wishAt, demandAt, baseDemandAt, dispAt, isWeekendShift, weekendEveryFor, targetHours, fair, start, hasTagOn, tagBreakAt };
   }
 
   function canShift(e, ids) { return ids.some(id => !e.shifts || e.shifts[id] !== false); }
@@ -229,7 +273,8 @@
           const gap = startAbs - prevEnd;
           if (gap < R.minRestHours * 60) {
             const ps = ctx.shiftById[eff[prevD]];
-            hard.push({ code: 'rest', d, msg: `Bare ${fmtH(gap)} hvile mellom ${ps.name.toLowerCase()} ${fmtDateWd(ctx.dayInfo[prevD].iso)} og ${st.name.toLowerCase()} ${fmtDateWd(ctx.dayInfo[d].iso)} (krav ${R.minRestHours} t)` });
+            const pair = `${ps.name.toLowerCase()} ${fmtDateWd(ctx.dayInfo[prevD].iso)} og ${st.name.toLowerCase()} ${fmtDateWd(ctx.dayInfo[d].iso)}`;
+            hard.push({ code: 'rest', d, msg: gap <= 0 ? `Vaktene overlapper: ${pair}` : `Bare ${fmtH(gap)} hvile mellom ${pair} (krav ${R.minRestHours} t)` });
           }
         }
         prevEnd = endAbs; prevD = d;
@@ -329,15 +374,20 @@
     if (dem.max != null && dem.max > 0 && present.length > dem.max) hard.push({ code: 'over', d, s, msg: `${label}: ${present.length} på vakt (maks ${dem.max})` });
     for (const [tag, min] of Object.entries(dem.tags || {})) {
       if (!min) continue;
-      const c = present.filter(e => hasTag(e, tag)).length;
+      const c = present.filter(e => ctx.hasTagOn(e, tag, d)).length;
       if (c < min) hard.push({ code: 'tag', d, s, tag, msg: `${label}: mangler ${tag} (${c} av ${min})` });
     }
-    if (dem.minK) { const c = present.filter(e => e.gender === 'K').length; if (c < dem.minK) hard.push({ code: 'genderK', d, s, msg: `${label}: for få kvinner (${c} av ${dem.minK})` }); }
-    if (dem.minM) { const c = present.filter(e => e.gender === 'M').length; if (c < dem.minM) hard.push({ code: 'genderM', d, s, msg: `${label}: for få menn (${c} av ${dem.minM})` }); }
+    const nK = present.filter(e => e.gender === 'K').length, nM = present.filter(e => e.gender === 'M').length;
+    if (dem.minK && nK < dem.minK) hard.push({ code: 'genderK', d, s, msg: `${label}: for få kvinner (${nK} av ${dem.minK})` });
+    if (dem.minM && nM < dem.minM) hard.push({ code: 'genderM', d, s, msg: `${label}: for få menn (${nM} av ${dem.minM})` });
+    const W = ctx.rules.weights;
+    if (dem.prefK && nK < dem.prefK) soft.push({ code: 'prefK', d, s, p: W.slotPref * (dem.prefK - nK), msg: `${label}: bør ha ${dem.prefK > 1 ? dem.prefK + ' kvinner' : 'en kvinne'} (har ${nK})` });
+    if (dem.prefM && nM < dem.prefM) soft.push({ code: 'prefM', d, s, p: W.slotPref * (dem.prefM - nM), msg: `${label}: bør ha ${dem.prefM > 1 ? dem.prefM + ' menn' : 'en mann'} (har ${nM})` });
     for (let i = 0; i < present.length; i++) for (let j = i + 1; j < present.length; j++) {
       const a = present[i], b = present[j];
       if ((a.notWith || []).includes(b.id) || (b.notWith || []).includes(a.id)) hard.push({ code: 'notWith', d, s, msg: `${label}: ${a.name} og ${b.name} skal ikke jobbe sammen` });
-      if ((a.preferWith || []).includes(b.id) || (b.preferWith || []).includes(a.id)) soft.push({ code: 'preferWith', d, s, p: -ctx.rules.weights.preferWith, msg: `${a.name} og ${b.name} jobber sammen` });
+      else if ((a.avoidWith || []).includes(b.id) || (b.avoidWith || []).includes(a.id)) soft.push({ code: 'avoidWith', d, s, p: W.avoidWith, msg: `${label}: ${a.name} og ${b.name} bør helst ikke jobbe sammen` });
+      if ((a.preferWith || []).includes(b.id) || (b.preferWith || []).includes(a.id)) soft.push({ code: 'preferWith', d, s, p: -W.preferWith, msg: `${a.name} og ${b.name} jobber sammen` });
     }
     const softSum = soft.reduce((a, x) => a + x.p, 0);
     return { hard, soft, softSum, present, demand: dem };
@@ -396,13 +446,13 @@
     const slotFixed = [];
     for (const sid of Object.keys(slotsAfter)) slotFixed.push(...diffSlot(slotsAfter[sid].hard, slotsBefore[sid].hard));
     const weight = list => list.reduce((a, v) => a + (v.missing || 1), 0);
-    let fixedCount = 0;
-    for (const sid of Object.keys(slotsAfter)) fixedCount += weight(slotsBefore[sid].hard) - weight(slotsAfter[sid].hard);
+    let fixedCount = 0, slotSoftDelta = 0;
+    for (const sid of Object.keys(slotsAfter)) { fixedCount += weight(slotsBefore[sid].hard) - weight(slotsAfter[sid].hard); slotSoftDelta += slotsAfter[sid].softSum - slotsBefore[sid].softSum; }
     return {
       ok: newHard.length === 0 && slotNew.length === 0,
       reasons: newHard.map(v => v.msg).concat(slotNew.map(v => v.msg)),
       newHard, slotNew, slotFixed, fixedCount,
-      softDelta: after.softSum - before.softSum,
+      softDelta: after.softSum - before.softSum + slotSoftDelta,
       statsBefore: before.stats, statsAfter: after.stats,
     };
   }
@@ -527,7 +577,7 @@
       if (dem.minM) out['g:M'] = dem.minM;
       return out;
     };
-    const hasKey = (e, key) => key.startsWith('t:') ? hasTag(e, key.slice(2)) : e.gender === key.slice(2);
+    const hasKey = (e, key, d) => key.startsWith('t:') ? ctx.hasTagOn(e, key.slice(2), d) : e.gender === key.slice(2);
     const isPlannedAbsent = (e, d) => { const a = ctx.absAt[e.id] && ctx.absAt[e.id][d]; return !!(a && a.planned); };
     // weekend eligibility while building: last worked weekend must be at least N weekends ago
     const lastWk = {};
@@ -552,10 +602,12 @@
         const present = presentIn(ctx, asg, d, s);
         if (present.length >= dem.min) break;
         const open = {};
-        for (const key of Object.keys(myReq)) open[key] = Math.max(0, myReq[key] - present.filter(e => hasKey(e, key)).length);
+        for (const key of Object.keys(myReq)) open[key] = Math.max(0, myReq[key] - present.filter(e => hasKey(e, key, d)).length);
+        const openPrefK = Math.max(0, (dem.prefK || 0) - present.filter(e => e.gender === 'K').length);
+        const openPrefM = Math.max(0, (dem.prefM || 0) - present.filter(e => e.gender === 'M').length);
         // people still available in this batch per required attribute
         const availKey = {};
-        for (const key of Object.keys(batchNeed)) availKey[key] = emps.filter(e => hasKey(e, key) && available(e)).length;
+        for (const key of Object.keys(batchNeed)) availKey[key] = emps.filter(e => hasKey(e, key, d) && available(e)).length;
         let best = null, bestScore = -Infinity;
         for (const e of emps) {
           const row = asg[e.id];
@@ -568,12 +620,15 @@
           if (!chk.ok) continue;
           let score = 0;
           // requirements this slot still needs
-          for (const key of Object.keys(open)) if (open[key] > 0 && hasKey(e, key)) score += 25;
+          for (const key of Object.keys(open)) if (open[key] > 0 && hasKey(e, key, d)) score += 25;
+          if (openPrefK > 0 && e.gender === 'K') score += 8;
+          if (openPrefM > 0 && e.gender === 'M') score += 8;
           // scarcity: keep rare people for the slots that need them
           for (const key of Object.keys(batchNeed)) {
-            if (!hasKey(e, key) || myReq[key]) continue;
+            if (!hasKey(e, key, d) || myReq[key]) continue;
             if (batchNeed[key] > 0 && availKey[key] <= batchNeed[key]) score -= 30;
           }
+          for (const p of present) if ((e.avoidWith || []).includes(p.id) || (p.avoidWith || []).includes(e.id)) score -= 6;
           if (d > 0 && row[d - 1] === s) score += st.isNight ? 14 : 6; // keep blocks together, nights especially
           if (d > 0 && row[d - 1] && row[d - 1] !== s) score -= 3;  // avoid type change inside a run
           if (st.isNight) { const f = ctx.fair[e.id]; if (f && nightsSoFar[e.id] < f.nights * (d + 1) / ctx.days) score += 4; else score -= 2; }
@@ -589,7 +644,7 @@
         planned[best.id] += st.hours;
         if (st.isNight) nightsSoFar[best.id]++;
         if (weekendShift) { wkSoFar[best.id]++; lastWk[best.id] = w; }
-        for (const key of Object.keys(myReq)) if (open[key] > 0 && hasKey(best, key)) batchNeed[key] = Math.max(0, (batchNeed[key] || 0) - 1);
+        for (const key of Object.keys(myReq)) if (open[key] > 0 && hasKey(best, key, d)) batchNeed[key] = Math.max(0, (batchNeed[key] || 0) - 1);
       }
     }
 
@@ -1070,7 +1125,31 @@
     }
 
     candidates.sort((a, b) => b.fixes - a.fixes || a.points - b.points || a.changes.length - b.changes.length);
-    return { d, s, iso: ctx.dayInfo[d].iso, slot: slotBefore, candidates, excluded };
+
+    // What stands in the way? For each open requirement: is anyone at all qualified today, and if so, what stops them?
+    const blockers = [];
+    const open = slotBefore.hard.filter(v => v.code !== 'over' && v.code !== 'notWith');
+    const stillOpen = open.filter(v => !candidates.some(c => c.fixes > 0 && coversRequirement(ctx, c, v, d, s)));
+    for (const v of stillOpen) {
+      const qualifies = emp => v.code === 'tag' ? ctx.hasTagOn(emp, v.tag, d) : v.code === 'genderK' ? emp.gender === 'K' : v.code === 'genderM' ? emp.gender === 'M' : true;
+      const who = ctx.employees.filter(emp => qualifies(emp) && !(emp.shifts && emp.shifts[s] === false) && !presentIn(ctx, asg, d, s).includes(emp));
+      const reasons = who.map(emp => { const ex = excluded.find(x => x.employeeId === emp.id); return ex ? `${emp.name}: ${ex.reasons[0]}` : null; }).filter(Boolean);
+      const what = v.code === 'tag' ? 'tag:' + v.tag : v.code === 'genderK' ? 'genderK' : v.code === 'genderM' ? 'genderM' : 'min';
+      const label = v.code === 'tag' ? `kravet om ${v.tag}` : v.code === 'genderK' ? 'kravet om kvinne på vakten' : v.code === 'genderM' ? 'kravet om mann på vakten' : 'minimumsbemanningen (én færre)';
+      blockers.push({ code: v.code, what, label, msg: v.msg, qualified: who.length, reasons: reasons.slice(0, 6) });
+    }
+    // attribute requirements first (what a manager would waive first), bare minimum last
+    blockers.sort((a, b) => (a.code === 'under' ? 1 : 0) - (b.code === 'under' ? 1 : 0));
+    return { d, s, iso: ctx.dayInfo[d].iso, slot: slotBefore, candidates, excluded, blockers };
+  }
+  function coversRequirement(ctx, cand, v, d, s) {
+    const emp = ctx.empById[cand.employeeId];
+    if (!emp) return false;
+    if (v.code === 'under') return true;
+    if (v.code === 'tag') return ctx.hasTagOn(emp, v.tag, d);
+    if (v.code === 'genderK') return emp.gender === 'K';
+    if (v.code === 'genderM') return emp.gender === 'M';
+    return false;
   }
 
   function costLabel(cost, hours) {
@@ -1123,7 +1202,7 @@
     HARD_W, WD_SHORT, WD_LONG,
     parseISO, toISO, addDays, weekdayOf, nextMonday, isoWeek, fmtDate, fmtDateWd, fmtH, fmtHours, toMin,
     defaultRules, defaultShiftTypes, emptyDemand,
-    buildCtx, evalEmployee, evalSlot, evaluate, evaluateCtx, capacity, checkChange, presentIn,
+    buildCtx, evalEmployee, evalSlot, evaluate, evaluateCtx, capacity, checkChange, presentIn, hasTag,
     generate, improve, improveRoster, polish, construct, emptyAssignment, cloneAsg,
     uncoveredSlots, findReplacements, autoRepair, extraHoursCost, costLabel, toCSV, mulberry32,
   };

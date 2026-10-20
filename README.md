@@ -10,9 +10,10 @@ Alt kjører i nettleseren. Ingenting sendes til en server; data lagres lokalt i 
 ## Hva prototypen gjør
 
 1. **Beskriv kriteriene**
-   - Ansatte med stillingsprosent, kjønn, hvilke vakttyper de kan gå, kompetanse (frie merkelapper som «medikament», «erfaren»), helgefrekvens, helgestilling, faste dager de ikke kan jobbe, hvem de ikke skal jobbe sammen med, hvem de jobber godt sammen med.
+   - Ansatte med stillingsprosent, kjønn, hvilke vakttyper de kan gå, kompetanse og egenskaper (frie merkelapper som «medikament», «erfaren», «utagering»), helgefrekvens, helgestilling, faste dager de ikke kan jobbe, hvem de *aldri* skal jobbe sammen med (hard regel), hvem de *helst ikke* bør jobbe sammen med (begrenses), hvem de jobber godt sammen med.
+   - Midlertidige begrensninger: en egenskap som ikke gjelder i en periode, f.eks. «går ikke i utagering» ved graviditet eller skade.
    - Ferie, permisjon, kurs, innvilget fri og ønsker (fri / vakt).
-   - Bemanningskrav per vakttype for hverdag og helg: min/maks antall, kompetansekrav, kjønnssammensetning.
+   - Bemanningskrav per vakttype for hverdag og helg: min/maks antall, kompetansekrav (f.eks. 2 med medikamentkompetanse for dobbeltkontroll), påkrevd kjønnssammensetning og ønsket kjønnssammensetning («bør ha en mann»).
    - Regler fra lov og tariff, med forklaring og lenke til paragraf: 11 t daglig hvile, 35 t ukentlig fri, maks timer per uke, maks dager og netter på rad, helgefrekvens, gjennomsnittlig ukentlig arbeidstid.
    - Prioriteringer når alt ikke kan oppfylles (treffe stillingsprosent, hele helger, nattblokker, ønsker, gode team …).
 
@@ -26,9 +27,14 @@ Alt kjører i nettleseren. Ingenting sendes til en server; data lagres lokalt i 
    - Meld fravær. Vaktflyt finner vaktene som må dekkes og rangerer lovlige løsninger: hvem som er kvalifisert og tilgjengelig, hva det koster (innenfor stillingen / merarbeid / overtid), og om løsningen krever én eller to endringer.
    - For hver som *ikke* kan, står det hvorfor: «Bare 9,5 t hvile mellom kveld man. og dag tir. (krav 11 t)», «Har ferie», «Uke 46: lengste sammenhengende fritid er 33,5 t», «Jobber ikke nattvakt».
    - «Løs alle automatisk» tar beste forslag for hvert hull og sier fra om det som ikke lar seg løse lovlig.
+   - Når ingen kan dekke vakten lovlig: appen viser hvilket krav som stopper, hvem som er kvalifisert og hva som hindrer dem, og lar lederen gi **dispensasjon** fra ett krav for akkurat den vakten – med begrunnelse, loggført og synlig i regelrapporten.
    - Endringslogg og angre.
 
-4. **Eksport**: kopier tabellen til utklippstavlen (lim rett inn i Excel/Gat), CSV, utskrift, sikkerhetskopi som JSON.
+4. **Regelrapport** til drøfting med tillitsvalgte (AML § 10-3): regler lagt til grunn, bemanningskrav, nøkkeltall per ansatt (timer mot stilling, høyeste uke, lengste arbeidsperiode, netter, helger), brudd, avvik fra ønsker, dispensasjoner, manuelle endringer og signaturfelt. Printbar.
+
+5. **Flere turnuser**: grunnturnus, sommerturnus, juleturnus, påsketurnus lagres som egne, navngitte perioder og kan hentes fram igjen.
+
+6. **Eksport**: kopier tabellen til utklippstavlen (lim rett inn i Excel/Gat), CSV, utskrift, sikkerhetskopi som JSON.
 
 ## Sette opp nettsiden (GitHub Pages)
 
@@ -61,7 +67,7 @@ console.log('brudd:', r.report.hardCount, 'dekning:', r.report.coverage);"
 ## Hvordan den løser kabalen
 
 - **Harde regler** (brytes aldri av generatoren): bemanning, kompetanse og kjønn per vakt; daglig og ukentlig hvile; maks timer per uke; dager og netter på rad; helgefrekvens; planlagt fravær; innvilget fri; hvem som kan gå hvilke vakttyper; hvem som ikke skal jobbe sammen.
-- **Myke regler** (vektes): avvik fra stillingsprosent, ønsker, hele helger, netter i blokker, stabile vakttyper, enkeltstående fri-/arbeidsdager, rettferdig fordeling av netter og helger, foretrukne kolleger.
+- **Myke regler** (vektes): avvik fra stillingsprosent, ønsker, hele helger, netter i blokker, stabile vakttyper, enkeltstående fri-/arbeidsdager, rettferdig fordeling av netter og helger, foretrukne kolleger, kolleger som helst ikke bør jobbe sammen, ønsket sammensetning på vakten.
 - **Algoritme**: grådig konstruksjon med helger først (knapphetsbevisst, så eneste medikamentkompetente ikke brukes på en vakt som ikke trenger det), deretter simulert nedkjøling over bytter (flytt, bytt, bytt dager, bytt helger, slå sammen netter), og til slutt en deterministisk opprydding som søker etter ett eller to bytter som fjerner gjenværende brudd. Et nytt forsøk startes automatisk hvis det første ikke går helt opp.
 
 ## Dette er en prototype

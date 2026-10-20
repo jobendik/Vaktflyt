@@ -26,7 +26,7 @@
     return migrate(VF_DEMO.demoModel());
   }
   function migrate(m) {
-    m.absences = m.absences || []; m.wishes = m.wishes || []; m.changelog = m.changelog || [];
+    m.absences = m.absences || []; m.wishes = m.wishes || []; m.changelog = m.changelog || []; m.savedRosters = m.savedRosters || []; m.dispensations = m.dispensations || [];
     m.settings.tags = m.settings.tags || [];
     for (const e of m.employees) for (const t of (e.tags || [])) if (!m.settings.tags.includes(t)) m.settings.tags.push(t);
     if (m.roster && !m.roster.asg) m.roster = null;
@@ -133,6 +133,7 @@
       case 'turnus': viewTurnus(main); break;
       case 'fravaer': viewFravaer(main); break;
       case 'eksport': viewEksport(main); break;
+      case 'rapport': viewRapport(main); break;
     }
   }
   function periodLabel() {
@@ -179,9 +180,14 @@
         </div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h2>Lagrede turnuser</h2><span class="muted small">grunnturnus, sommer, jul, påske – hver periode for seg</span></div>
+        ${savedRostersHtml()}
+      </div>
+      <div class="panel">
         <h2>Fravær og ønsker i perioden</h2>
         ${absenceWishSummary()}
       </div>`;
+    bindSavedRosters(main);
     $('#unitName').addEventListener('change', ev => { model.settings.unitName = ev.target.value.trim(); commit(); renderNav(); });
     $('#periodStart').addEventListener('change', ev => {
       let v = ev.target.value; if (!v) return;
@@ -219,7 +225,9 @@
       if (e.onlyWeekends) lim.push('bare helg');
       if (e.noWeekends) lim.push('ikke helg');
       if (e.blockedWeekdays && e.blockedWeekdays.length) lim.push('ikke ' + e.blockedWeekdays.map(d => VF.WD_LONG[d]).join('/'));
-      if (e.notWith && e.notWith.length) lim.push('ikke med ' + e.notWith.map(id => (empById(id) || {}).name || '').map(n => n.split(' ')[0]).join(', '));
+      if (e.notWith && e.notWith.length) lim.push('aldri med ' + e.notWith.map(id => (empById(id) || {}).name || '').map(n => n.split(' ')[0]).join(', '));
+      if (e.avoidWith && e.avoidWith.length) lim.push('helst ikke med ' + e.avoidWith.map(id => (empById(id) || {}).name || '').map(n => n.split(' ')[0]).join(', '));
+      for (const b of (e.tagBreaks || [])) lim.push(`uten «${b.tag}» ${VF.fmtDate(b.from)}–${b.to ? VF.fmtDate(b.to) : ''}${b.note ? ' (' + b.note + ')' : ''}`);
       if (e.preferWith && e.preferWith.length) lim.push('gjerne med ' + e.preferWith.map(id => (empById(id) || {}).name || '').map(n => n.split(' ')[0]).join(', '));
       if (e.wantsExtra) lim.push('ønsker ekstravakter');
       const nAbs = model.absences.filter(a => a.employeeId === e.id).length, nW = model.wishes.filter(w => w.employeeId === e.id).length;
@@ -237,16 +245,16 @@
     main.innerHTML = `
       <div class="page-head"><div><h1>Ansatte</h1><div class="sub">${model.employees.length} ansatte · ${nb(model.employees.reduce((a, e) => a + e.percent, 0) / 100)} årsverk</div></div>
         <div class="toolbar"><button class="btn btn-primary" id="btnNewEmp">Ny ansatt</button></div></div>
-      <div class="panel" style="padding:0 0 4px"><table class="data"><thead><tr><th>Navn</th><th>Stilling</th><th>Kjønn</th><th>Vakter</th><th>Kompetanse</th><th>Helg</th><th>Begrensninger og ønsker</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="help">Kompetanse er frie merkelapper (f.eks. «medikament», «erfaren») som bemanningskravet kan kreve. Innvilget fri er bindende; ønsker vektes.</p>`;
+      <div class="panel" style="padding:0 0 4px"><table class="data"><thead><tr><th>Navn</th><th>Stilling</th><th>Kjønn</th><th>Vakter</th><th>Kompetanse og egenskaper</th><th>Helg</th><th>Begrensninger og ønsker</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="help">Kompetanse og egenskaper er frie merkelapper (f.eks. «medikament», «erfaren», «utagering») som bemanningskravet kan kreve – også midlertidig fravær av dem (graviditet, skade). Innvilget fri er bindende; ønsker vektes.</p>`;
     $('#btnNewEmp').addEventListener('click', () => openEmployeeDialog(null));
     $$('[data-edit]', main).forEach(b => b.addEventListener('click', () => openEmployeeDialog(b.dataset.edit)));
   }
 
   function openEmployeeDialog(id) {
     const isNew = !id;
-    const e = isNew ? { id: 'e' + Date.now().toString(36), name: '', title: '', percent: 100, gender: 'K', tags: [], shifts: {}, notWith: [], preferWith: [], blockedWeekdays: [], wantsExtra: false, notes: '' } : JSON.parse(JSON.stringify(empById(id)));
-    e.shifts = e.shifts || {}; e.tags = e.tags || []; e.notWith = e.notWith || []; e.preferWith = e.preferWith || []; e.blockedWeekdays = e.blockedWeekdays || [];
+    const e = isNew ? { id: 'e' + Date.now().toString(36), name: '', title: '', percent: 100, gender: 'K', tags: [], shifts: {}, notWith: [], avoidWith: [], preferWith: [], blockedWeekdays: [], tagBreaks: [], wantsExtra: false, notes: '' } : JSON.parse(JSON.stringify(empById(id)));
+    e.shifts = e.shifts || {}; e.tags = e.tags || []; e.notWith = e.notWith || []; e.avoidWith = e.avoidWith || []; e.preferWith = e.preferWith || []; e.blockedWeekdays = e.blockedWeekdays || []; e.tagBreaks = e.tagBreaks || [];
     const R = rules();
     const others = model.employees.filter(x => x.id !== e.id);
     const absences = model.absences.filter(a => a.employeeId === e.id);
@@ -267,18 +275,26 @@
         <div class="field"><label>Stillingsprosent</label><input name="percent" type="number" min="1" max="100" step="1" value="${e.percent}" required></div>
         <div class="field"><label>Kjønn</label><select name="gender"><option value="K" ${e.gender === 'K' ? 'selected' : ''}>Kvinne</option><option value="M" ${e.gender === 'M' ? 'selected' : ''}>Mann</option><option value="X" ${e.gender === 'X' ? 'selected' : ''}>Annet / ikke oppgitt</option></select></div>
         <div class="field span-2"><label>Kan jobbe</label><div class="checks">${shiftsHtml}</div></div>
-        <div class="field span-2"><label>Kompetanse</label><div class="checks">${tagsHtml}<label><input name="newTag" placeholder="ny merkelapp…" style="padding:3px 6px;border:1px solid var(--line);border-radius:4px;width:150px"></label></div></div>
+        <div class="field span-2"><label>Kompetanse og egenskaper</label><div class="checks">${tagsHtml}<label><input name="newTag" placeholder="ny merkelapp…" style="padding:3px 6px;border:1px solid var(--line);border-radius:4px;width:150px"></label></div></div>
         <div class="field"><label>Helgefrekvens</label><select name="weekendEvery"><option value="">Standard (hver ${R.weekendEvery}. helg)</option>${[1, 2, 3, 4].map(n => `<option value="${n}" ${e.weekendEvery === n ? 'selected' : ''}>Hver ${n === 1 ? '' : n + '. '}helg${n === 1 ? ' (ingen begrensning)' : ''}</option>`).join('')}</select></div>
         <div class="field"><label>Helg</label><div class="checks" style="padding-top:6px"><label><input type="checkbox" name="onlyWeekends" ${e.onlyWeekends ? 'checked' : ''}> Helgestilling (bare helg)</label><label><input type="checkbox" name="noWeekends" ${e.noWeekends ? 'checked' : ''}> Fritatt fra helg</label></div></div>
         <div class="field span-2"><label>Kan ikke jobbe på</label><div class="checks">${wdHtml}</div></div>
-        <div class="field"><label>Skal ikke jobbe sammen med</label><div class="checks" style="max-height:120px;overflow:auto">${colleagues('notWith')}</div></div>
-        <div class="field"><label>Jobber godt sammen med</label><div class="checks" style="max-height:120px;overflow:auto">${colleagues('preferWith')}</div></div>
+        <div class="field"><label>Skal aldri jobbe sammen med</label><div class="checks" style="max-height:120px;overflow:auto">${colleagues('notWith')}</div></div>
+        <div class="field"><label>Bør helst ikke jobbe sammen med</label><div class="checks" style="max-height:120px;overflow:auto">${colleagues('avoidWith')}</div><div class="help">Begrenser antall felles vakter uten å forby det.</div></div>
+        <div class="field span-2"><label>Jobber godt sammen med</label><div class="checks" style="max-height:120px;overflow:auto">${colleagues('preferWith')}</div></div>
         <div class="field"><label>Annet</label><div class="checks" style="padding-top:6px"><label><input type="checkbox" name="wantsExtra" ${e.wantsExtra ? 'checked' : ''}> Ønsker ekstravakter ved fravær</label></div></div>
         <div class="field"><label>Maks dager på rad (overstyr)</label><input name="maxConsecutiveDays" type="number" min="1" max="14" value="${e.maxConsecutiveDays || ''}" placeholder="${R.maxConsecutiveDays}"></div>
         <div class="field span-2"><label>Notater</label><textarea name="notes">${esc(e.notes || '')}</textarea></div>
       </div>
       ${isNew ? '' : `
-      <fieldset style="margin-top:14px"><legend>Fravær (ferie, permisjon, kurs, sykdom)</legend>
+      <fieldset style="margin-top:14px"><legend>Midlertidige begrensninger</legend>
+        <p class="help">En kompetanse eller egenskap som ikke gjelder i en periode – for eksempel «går ikke i utagering» ved graviditet eller skade. Bemanningskrav som trenger egenskapen, teller da ikke denne personen.</p>
+        <table class="data">${(e.tagBreaks || []).map(b => `<tr><td><span class="tag">${esc(b.tag)}</span></td><td class="nowrap">${VF.fmtDateWd(b.from)} – ${b.to ? VF.fmtDateWd(b.to) : 'inntil videre'}</td><td class="muted">${esc(b.note || '')}</td><td class="actions"><button type="button" class="btn btn-sm btn-danger" data-del-tb="${b.id}">Slett</button></td></tr>`).join('') || '<tr><td class="muted">Ingen</td></tr>'}</table>
+        <div class="toolbar" style="margin-top:8px"><select id="tbTag">${e.tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('') || '<option value="">(ingen egenskaper registrert)</option>'}</select>
+          <input id="tbFrom" type="date" value="${model.settings.periodStart}"> <span class="muted">til</span> <input id="tbTo" type="date"> <input id="tbNote" placeholder="årsak" style="width:160px">
+          <button type="button" class="btn btn-sm" id="btnAddTb">Legg til</button></div>
+      </fieldset>
+      <fieldset><legend>Fravær (ferie, permisjon, kurs, sykdom)</legend>
         <table class="data" id="absTable">${absRows || '<tr><td class="muted">Ingen registrert</td></tr>'}</table>
         <div class="toolbar" style="margin-top:8px"><select id="absType"><option value="ferie">Ferie</option><option value="permisjon">Permisjon</option><option value="kurs">Kurs</option><option value="syk">Syk</option><option value="annet">Annet</option></select>
           <input id="absFrom" type="date" value="${model.settings.periodStart}"> <span class="muted">til</span> <input id="absTo" type="date" value="${model.settings.periodStart}"> <input id="absNote" placeholder="merknad" style="width:140px">
@@ -312,7 +328,7 @@
       e.weekendEvery = fd.get('weekendEvery') ? +fd.get('weekendEvery') : undefined;
       e.onlyWeekends = !!fd.get('onlyWeekends'); e.noWeekends = !!fd.get('noWeekends');
       e.blockedWeekdays = fd.getAll('bwd').map(Number);
-      e.notWith = fd.getAll('notWith'); e.preferWith = fd.getAll('preferWith');
+      e.notWith = fd.getAll('notWith'); e.avoidWith = fd.getAll('avoidWith').filter(x => !e.notWith.includes(x)); e.preferWith = fd.getAll('preferWith');
       e.wantsExtra = !!fd.get('wantsExtra');
       e.maxConsecutiveDays = +fd.get('maxConsecutiveDays') || undefined;
       e.notes = (fd.get('notes') || '').trim();
@@ -323,7 +339,7 @@
       $('#btnDelEmp').addEventListener('click', () => {
         if (!confirm(`Slette ${e.name}?`)) return;
         model.employees = model.employees.filter(x => x.id !== e.id);
-        for (const x of model.employees) { x.notWith = (x.notWith || []).filter(i => i !== e.id); x.preferWith = (x.preferWith || []).filter(i => i !== e.id); }
+        for (const x of model.employees) { x.notWith = (x.notWith || []).filter(i => i !== e.id); x.avoidWith = (x.avoidWith || []).filter(i => i !== e.id); x.preferWith = (x.preferWith || []).filter(i => i !== e.id); }
         model.absences = model.absences.filter(a => a.employeeId !== e.id); model.wishes = model.wishes.filter(w => w.employeeId !== e.id);
         ensureRosterRows(); commit(); dlg.close(); render(); toast('Ansatt slettet.');
       });
@@ -338,6 +354,13 @@
         model.wishes.push({ id: 'w' + Date.now().toString(36), employeeId: e.id, date, kind: k === 'vakt' ? 'vakt' : 'fri', hard: k === 'frihard', shift: k === 'vakt' ? ($('#wishShift').value || null) : null, note: $('#wishNote').value.trim() });
         commit(); openEmployeeDialog(e.id);
       });
+      $('#btnAddTb').addEventListener('click', () => {
+        const tag = $('#tbTag').value, from = $('#tbFrom').value; if (!tag || !from) return;
+        const live = empById(e.id); live.tagBreaks = live.tagBreaks || [];
+        live.tagBreaks.push({ id: 'tb' + Date.now().toString(36), tag, from, to: $('#tbTo').value || '', note: $('#tbNote').value.trim() });
+        commit(); openEmployeeDialog(e.id);
+      });
+      $$('[data-del-tb]', c).forEach(b => b.addEventListener('click', () => { const live = empById(e.id); live.tagBreaks = (live.tagBreaks || []).filter(x => x.id !== b.dataset.delTb); commit(); openEmployeeDialog(e.id); }));
       $$('[data-del-abs]', c).forEach(b => b.addEventListener('click', () => { model.absences = model.absences.filter(a => a.id !== b.dataset.delAbs); commit(); openEmployeeDialog(e.id); }));
       $$('[data-del-wish]', c).forEach(b => b.addEventListener('click', () => { model.wishes = model.wishes.filter(w => w.id !== b.dataset.delWish); commit(); openEmployeeDialog(e.id); }));
     }
@@ -351,17 +374,19 @@
       const cs = c.shiftById[s.id];
       return `<tr data-shift="${s.id}"><td><span class="chip chip-${s.id}">${s.id}</span></td><td><input type="text" data-f="name" value="${esc(s.name)}"></td><td><input type="time" data-f="start" value="${s.start}"></td><td><input type="time" data-f="end" value="${s.end}"></td><td class="num">${nb(cs.hours)} t</td><td>${cs.isNight ? 'Ja' : 'Nei'}</td></tr>`;
     }).join('');
-    const demandTable = key => `<table class="data"><thead><tr><th>Vakt</th><th>Min</th><th>Maks</th>${model.settings.tags.map(t => `<th>${esc(t)}</th>`).join('')}<th>Min kvinner</th><th>Min menn</th></tr></thead><tbody>
-      ${model.settings.shiftTypes.map(s => { const d = model.demand[key][s.id] || (model.demand[key][s.id] = { min: 0, max: 0, tags: {}, minK: 0, minM: 0 }); return `<tr data-key="${key}" data-shift="${s.id}">
+    const demandTable = key => `<table class="data"><thead><tr><th>Vakt</th><th>Min</th><th>Maks</th>${model.settings.tags.map(t => `<th>${esc(t)}</th>`).join('')}<th>Min kvinner</th><th>Min menn</th><th class="muted">Bør ha kvinner</th><th class="muted">Bør ha menn</th></tr></thead><tbody>
+      ${model.settings.shiftTypes.map(s => { const d = model.demand[key][s.id] || (model.demand[key][s.id] = { min: 0, max: 0, tags: {}, minK: 0, minM: 0, prefK: 0, prefM: 0 }); return `<tr data-key="${key}" data-shift="${s.id}">
         <td><span class="chip chip-${s.id}">${s.id}</span> ${esc(s.name)}</td>
         <td><input type="number" min="0" max="20" data-f="min" value="${d.min}"></td><td><input type="number" min="0" max="20" data-f="max" value="${d.max}"></td>
         ${model.settings.tags.map(t => `<td><input type="number" min="0" max="10" data-tag="${esc(t)}" value="${(d.tags || {})[t] || 0}"></td>`).join('')}
-        <td><input type="number" min="0" max="10" data-f="minK" value="${d.minK || 0}"></td><td><input type="number" min="0" max="10" data-f="minM" value="${d.minM || 0}"></td></tr>`; }).join('')}
-    </tbody></table>`;
+        <td><input type="number" min="0" max="10" data-f="minK" value="${d.minK || 0}"></td><td><input type="number" min="0" max="10" data-f="minM" value="${d.minM || 0}"></td>
+        <td><input type="number" min="0" max="10" data-f="prefK" value="${d.prefK || 0}"></td><td><input type="number" min="0" max="10" data-f="prefM" value="${d.prefM || 0}"></td></tr>`; }).join('')}
+    </tbody></table>
+    <p class="help" style="margin-top:6px">Kompetansekrav og «min» er absolutte (f.eks. 2 med medikamentkompetanse for dobbeltkontroll). «Bør ha» er ønskelig sammensetning som vektes, men kan fravikes.</p>`;
     const ratio = cap.perWeek.available / Math.max(1, cap.perWeek.demandMin);
     main.innerHTML = `
       <div class="page-head"><div><h1>Bemanning</h1><div class="sub">Vakttyper og hvor mange som må være på jobb</div></div></div>
-      <div class="panel"><h2>Vakttyper</h2>
+      <div class="panel"><div class="panel-head"><h2>Vakttyper</h2><button class="btn btn-sm" id="btnNewTag">Ny kompetanse/egenskap</button></div>
         <table class="data"><thead><tr><th>Kode</th><th>Navn</th><th>Start</th><th>Slutt</th><th>Timer</th><th>Natt</th></tr></thead><tbody id="shiftRows">${shiftRows}</tbody></table>
         <p class="help" style="margin-top:8px">En vakt som slutter etter midnatt regnes som natt. Hviletid beregnes fra slutt til neste start.</p>
       </div>
@@ -372,6 +397,10 @@
         <div class="meter ${ratio < 1 ? 'danger' : ratio < 1.04 ? 'warn' : ''}" style="max-width:480px"><span style="width:${Math.min(100, ratio * 100 / 1.25)}%"></span></div>
         <p class="help" style="margin-top:8px">${ratio < 1 ? 'Kapasiteten er lavere enn minstebehovet – turnusen kan ikke gå opp uten flere ansatte eller lavere krav.' : ratio < 1.04 ? 'Svært lite slakk. Regn med at noen ansatte får litt færre timer enn stillingen tilsier, eller at helgekabalen blir stram.' : 'Kapasiteten dekker minstebehovet med margin. Overskuddet brukes til å møte stillingsprosentene (maks-grensen setter taket per vakt).'}</p>
       </div>`;
+    $('#btnNewTag').addEventListener('click', () => {
+      const t = (prompt('Navn på ny kompetanse eller egenskap (f.eks. «bil», «utagering»):') || '').trim().toLowerCase();
+      if (!t) return; if (!model.settings.tags.includes(t)) model.settings.tags.push(t); commit(); viewBemanning(main);
+    });
     $$('#shiftRows input', main).forEach(inp => inp.addEventListener('change', () => {
       const tr = inp.closest('tr'); const s = shiftById(tr.dataset.shift); const f = inp.dataset.f;
       if (f === 'name') s.name = inp.value.trim() || s.name; else s[f] = inp.value || s[f];
@@ -422,6 +451,8 @@
         ${weight('typeChange', 'Stabile vakttyper', 'Straff når vakttypen skifter midt i en arbeidsperiode (D D A A er bedre enn D A D A)')}
         ${weight('fairness', 'Rettferdig fordeling', 'Netter og helgevakter fordeles i forhold til stillingsprosent')}
         ${weight('preferWith', 'Gode team', 'Bonus når kolleger som jobber godt sammen får samme vakt')}
+        ${weight('avoidWith', 'Begrense felles vakter', 'Straff per felles vakt for kolleger som helst ikke bør jobbe sammen («aldri sammen» er en hard regel)')}
+        ${weight('slotPref', 'Ønsket sammensetning', 'Straff når en vakt mangler ønsket, men ikke påkrevd, sammensetning – f.eks. «bør ha en mann»')}
       </div>`;
     $$('[data-rule]', main).forEach(inp => inp.addEventListener('change', () => {
       model.rules = model.rules || {}; const k = inp.dataset.rule;
@@ -443,6 +474,7 @@
       <div class="toolbar no-print">
         <button class="btn" id="btnUndo" ${ui.undo.length ? '' : 'disabled'}>Angre</button>
         <button class="btn" id="btnClear" ${model.roster ? '' : 'disabled'}>Tøm</button>
+        <button class="btn" id="btnSaveAs" ${model.roster ? '' : 'disabled'}>Lagre som …</button>
         <button class="btn" id="btnImprove" ${model.roster && !ui.busy ? '' : 'disabled'}>Forbedre videre</button>
         <button class="btn btn-primary" id="btnGenerate" ${ui.busy ? 'disabled' : ''}>${model.roster ? 'Generer på nytt' : 'Generer turnus'}</button>
       </div></div>`;
@@ -473,6 +505,7 @@
     $('#btnImprove').addEventListener('click', improveRosterUI);
     $('#btnUndo').addEventListener('click', undo);
     $('#btnClear').addEventListener('click', () => { if (!confirm('Tømme turnusen?')) return; pushUndo(); model.roster = null; ui.sel = null; commit(); render(); });
+    $('#btnSaveAs').addEventListener('click', saveRosterAs);
     $('#rosterScroll').addEventListener('click', ev => {
       const td = ev.target.closest('td.cell'); if (td) { ui.sel = { e: td.dataset.e, d: +td.dataset.d }; ui.pendingChange = null; refreshTurnus(); return; }
       const ft = ev.target.closest('td[data-slot]'); if (ft) { ui.sel = { d: +ft.dataset.d, s: ft.dataset.slot }; ui.pendingChange = null; refreshTurnus(); }
@@ -610,17 +643,25 @@
     for (const [t, n] of Object.entries(q.demand.tags || {})) if (n) req.push(`${n} ${t}`);
     if (q.demand.minK) req.push(`${q.demand.minK} kvinne${q.demand.minK > 1 ? 'r' : ''}`);
     if (q.demand.minM) req.push(`${q.demand.minM} ${q.demand.minM > 1 ? 'menn' : 'mann'}`);
-    if (req.length) html += `<div class="small muted" style="margin-bottom:8px">Krav: minst ${req.join(', ')}</div>`;
+    const pref = [];
+    if (q.demand.prefK) pref.push(`${q.demand.prefK} kvinne${q.demand.prefK > 1 ? 'r' : ''}`);
+    if (q.demand.prefM) pref.push(`${q.demand.prefM} ${q.demand.prefM > 1 ? 'menn' : 'mann'}`);
+    if (req.length || pref.length) html += `<div class="small muted" style="margin-bottom:8px">${req.length ? 'Krav: minst ' + req.join(', ') : ''}${req.length && pref.length ? ' · ' : ''}${pref.length ? 'Bør ha: ' + pref.join(', ') : ''}</div>`;
+    const slotSoft = q.soft.filter(v => v.code !== 'preferWith');
+    if (slotSoft.length) html += `<div class="viol" style="margin-bottom:8px">${slotSoft.map(v => `<div class="v soft" style="cursor:default">${esc(v.msg)}</div>`).join('')}</div>`;
     if (q.hard.length) html += `<div class="viol" style="margin-bottom:8px">${q.hard.map(v => `<div class="v" style="cursor:default">${esc(v.msg)}</div>`).join('')}</div>`;
     if (!q.hard.length && q.demand.max && q.present.length >= q.demand.max) {
+      html += waivedHtml(d, s);
       html += `<p class="muted small" style="margin-top:10px">Vakten er fullt bemannet. Klikk på en av de ansatte i turnusen for å se hvem som kan overta for vedkommende.</p>`;
       return html;
     }
+    html += waivedHtml(d, s);
     const rep = VF.findReplacements(model, asg, d, s, { swaps: true });
     const title = q.hard.length ? 'Hvem kan fylle hullet?' : 'Hvem kan legges til?';
     html += `<h3 style="margin:12px 0 4px">${title}</h3>`;
     const cands = rep.candidates.slice(0, 8);
-    html += cands.length ? cands.map(cd => candidateHtml(cd, [])).join('') : '<p class="muted small">Ingen kan ta vakten uten å bryte regler. Vurder innleie/vikar eller endre kravene.</p>';
+    html += cands.length ? cands.map(cd => candidateHtml(cd, [])).join('') : (q.hard.length ? '' : '<p class="muted small">Ingen kan legges til uten å bryte regler.</p>');
+    html += blockersHtml(rep);
     html += excludedHtml(rep.excluded);
     return html;
   }
@@ -629,6 +670,40 @@
     const changes = pre.concat(cd.changes);
     const kind = cd.kind === 'direct' ? (e.wantsExtra ? 'ønsker ekstravakter · ' : '') : cd.kind === 'move' ? 'bytte av vakttype · ' : 'to endringer · ';
     return `<div class="cand" data-apply='${esc(JSON.stringify(changes))}'><div class="n">${esc(e.name)}${cd.partnerId ? ` + ${esc((empById(cd.partnerId) || {}).name || '')}` : ''}</div><div class="l">${kind}${esc(cd.label)}${cd.fixes > 1 ? ` · dekker ${cd.fixes} krav` : ''}</div><button class="btn btn-sm" data-choose="1">Velg</button></div>`;
+  }
+  function blockersHtml(rep) {
+    if (!rep.blockers || !rep.blockers.length) return '';
+    const iso = dayISO(rep.d);
+    return `<div style="margin-top:10px;padding:10px 12px;border-radius:var(--radius);background:var(--warn-soft)">
+      <b>Ingen kan dekke dette lovlig.</b>
+      ${rep.blockers.map(b => `<div class="small" style="margin-top:8px"><div>${esc(b.msg)}${b.qualified ? ` – ${b.qualified} kvalifiserte, men:` : ' – ingen i staben er kvalifisert.'}</div>
+        ${b.reasons.length ? `<ul style="margin:4px 0 6px;padding-left:18px">${b.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+        <button class="btn btn-sm" data-waive="${esc(b.what)}" data-waive-d="${rep.d}" data-waive-s="${esc(rep.s)}">Gi dispensasjon fra ${esc(b.label)} ${VF.fmtDateWd(iso)}</button></div>`).join('')}
+      <div class="help" style="margin-top:8px">Dispensasjon gjelder bare denne ene vakten, loggføres og vises i regelrapporten. Alternativet er innleie/vikar.</div></div>`;
+  }
+  function waivedHtml(d, s) {
+    const list = (ctx().dispAt[d + ':' + s] || []);
+    if (!list.length) return '';
+    return `<div class="small" style="margin:6px 0">${list.map(x => `<div><span class="badge badge-warn">dispensasjon</span> ${esc(waiveLabel(x.what))}${x.note ? ' – ' + esc(x.note) : ''} <button class="btn-link small" data-unwaive="${x.id}">fjern</button></div>`).join('')}</div>`;
+  }
+  function waiveLabel(what) {
+    if (what === 'min') return 'én færre på vakt enn minimum';
+    if (what === 'genderK') return 'uten krav om kvinne';
+    if (what === 'genderM') return 'uten krav om mann';
+    if (what.startsWith('tag:')) return `uten krav om ${what.slice(4)}`;
+    return what;
+  }
+  function bindWaivers(root) {
+    $$('[data-waive]', root).forEach(b => b.addEventListener('click', () => {
+      const d = +b.dataset.waiveD, s = b.dataset.waiveS, what = b.dataset.waive;
+      const raw = prompt(`Begrunnelse for dispensasjon (${waiveLabel(what)}, ${shiftById(s).name.toLowerCase()} ${VF.fmtDateWd(dayISO(d))}):`, '');
+      if (raw === null) return;
+      const note = raw.trim();
+      model.dispensations.push({ id: 'x' + Date.now().toString(36), date: dayISO(d), shift: s, what, note, by: 'leder', ts: new Date().toISOString() });
+      logChange(`Dispensasjon: ${shiftById(s).name.toLowerCase()} ${VF.fmtDateWd(dayISO(d))} ${waiveLabel(what)}${note ? ' («' + note + '»)' : ''}`, []);
+      commit(); render(); toast('Dispensasjon registrert for denne vakten.');
+    }));
+    $$('[data-unwaive]', root).forEach(b => b.addEventListener('click', () => { model.dispensations = model.dispensations.filter(x => x.id !== b.dataset.unwaive); commit(); render(); }));
   }
   function excludedHtml(excluded) {
     if (!excluded.length) return '';
@@ -652,6 +727,7 @@
       const changes = JSON.parse(b.closest('.cand').dataset.apply);
       doManualChange(changes);
     }));
+    bindWaivers(box);
   }
   function doManualChange(changes, forced) {
     pushUndo(); applyChanges(changes);
@@ -664,6 +740,7 @@
     for (const e of model.employees) for (const v of r.employees[e.id].hard) items.push(`<div class="v" data-e="${e.id}" data-d="${Math.max(0, v.d)}"><b>${esc(e.name)}:</b> ${esc(v.msg)}</div>`);
     const soft = [];
     for (const e of model.employees) for (const v of r.employees[e.id].soft) if (['wishFri', 'wishVakt', 'wishShift', 'splitWeekend', 'singleNight', 'fairNights', 'fairWeekend', 'hours'].includes(v.code) && !(v.code === 'hours' && Math.abs(r.employees[e.id].stats.dev) < 4)) soft.push(`<div class="v soft" data-e="${e.id}" data-d="${Math.max(0, v.d)}"><b>${esc(e.name)}:</b> ${esc(v.msg)}</div>`);
+    for (let d = 0; d < c.days; d++) for (const s of model.settings.shiftTypes) for (const v of r.slots[d + ':' + s.id].soft) if (v.code !== 'preferWith') soft.push(`<div class="v soft" data-d="${d}" data-s="${s.id}">${esc(v.msg)}</div>`);
     let html = items.length ? `<div class="viol">${items.join('')}</div>` : `<p style="color:var(--ok)"><b>Ingen brudd.</b> Alle vakter er dekket og alle harde regler er oppfylt.</p>`;
     if (soft.length) html += `<details><summary>Avvik fra ønsker og preferanser (${soft.length})</summary><div class="viol">${soft.join('')}</div></details>`;
     return html;
@@ -741,6 +818,86 @@
     });
   }
 
+  // ------------------------------------------------------------ saved rosters
+  function saveRosterAs() {
+    if (!model.roster) return;
+    const c = ctx();
+    const def = `Turnus uke ${c.dayInfo[0].isoWeek}–${c.dayInfo[c.days - 1].isoWeek}`;
+    const name = (prompt('Navn på turnusen (f.eks. «Grunnturnus», «Sommerturnus 2027»):', def) || '').trim();
+    if (!name) return;
+    const r = report();
+    model.savedRosters.unshift({ id: 'r' + Date.now().toString(36), name, periodStart: model.settings.periodStart, weeks: model.settings.weeks, asg: VF.cloneAsg(model.roster.asg), savedAt: new Date().toISOString(), hardCount: r.hardCount, coverage: r.coverage });
+    commit(); toast(`Lagret som «${name}».`);
+  }
+  function openSavedRoster(id) {
+    const s = model.savedRosters.find(x => x.id === id); if (!s) return;
+    if (model.roster && !confirm('Turnusen som vises nå erstattes (den kan hentes tilbake med Angre). Fortsette?')) return;
+    pushUndo();
+    model.settings.periodStart = s.periodStart; model.settings.weeks = s.weeks;
+    model.roster = { asg: VF.cloneAsg(s.asg), generatedAt: s.savedAt, seed: 0, name: s.name };
+    ensureRosterRows(); ui.sel = null; ui.view = 'turnus'; commit(); render(); toast(`Åpnet «${s.name}».`);
+  }
+  function savedRostersHtml() {
+    if (!model.savedRosters.length) return '<p class="muted">Ingen lagrede turnuser. Lag en grunnturnus, så sommer-, jule- og påsketurnus som egne perioder, og lagre hver av dem fra Turnus-siden.</p>';
+    return `<table class="data"><thead><tr><th>Navn</th><th>Periode</th><th>Lagret</th><th>Status</th><th></th></tr></thead><tbody>${model.savedRosters.map(s => {
+      const end = VF.addDays(s.periodStart, s.weeks * 7 - 1);
+      return `<tr><td><b>${esc(s.name)}</b></td><td class="nowrap">uke ${VF.isoWeek(s.periodStart)}–${VF.isoWeek(end)} · ${VF.fmtDate(s.periodStart)}–${VF.fmtDate(end)} ${end.slice(0, 4)}</td><td class="nowrap muted">${new Date(s.savedAt).toLocaleDateString('nb-NO')}</td><td>${s.hardCount ? `<span class="badge badge-danger">${s.hardCount} brudd</span>` : '<span class="badge badge-ok">går opp</span>'}</td><td class="actions"><button class="btn btn-sm" data-open-roster="${s.id}">Åpne</button> <button class="btn btn-sm btn-danger" data-del-roster="${s.id}">Slett</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+  }
+  function bindSavedRosters(root) {
+    $$('[data-open-roster]', root).forEach(b => b.addEventListener('click', () => openSavedRoster(b.dataset.openRoster)));
+    $$('[data-del-roster]', root).forEach(b => b.addEventListener('click', () => { if (!confirm('Slette den lagrede turnusen?')) return; model.savedRosters = model.savedRosters.filter(x => x.id !== b.dataset.delRoster); commit(); render(); }));
+  }
+
+  // ================================================================== RAPPORT
+  function viewRapport(main) {
+    const c = ctx(); const r = report(); const R = rules();
+    if (!r) { main.innerHTML = `<div class="page-head"><div><h1>Regelrapport</h1></div></div><div class="panel"><div class="empty"><b>Ingen turnus å rapportere på</b>Lag en turnus først.</div></div>`; return; }
+    const rows = model.employees.map(e => {
+      const st = r.employees[e.id].stats; const er = r.employees[e.id];
+      const maxWeek = Math.max(...st.weekHours);
+      const every = e.weekendEvery || R.weekendEvery;
+      const bad = er.hard.length;
+      return `<tr><td><b>${esc(e.name)}</b><div class="muted small">${esc(e.title || '')}</div></td><td class="num">${e.percent} %</td><td class="num">${nb(st.hours)} / ${nb(st.target)}</td><td class="num" style="color:${Math.abs(st.dev) > 7.5 ? 'var(--warn)' : 'inherit'}">${st.dev >= 0 ? '+' : ''}${nb(st.dev)}</td><td class="num">${nb(maxWeek)}</td><td class="num">${st.longestRun}</td><td class="num">${st.nights}</td><td class="num">${st.workedWeekends} <span class="muted">(hver ${every}.)</span></td><td>${bad ? `<span class="badge badge-danger">${bad}</span>` : '<span class="badge badge-ok">ok</span>'}</td></tr>`;
+    }).join('');
+    const hardList = [];
+    for (let d = 0; d < c.days; d++) for (const s of model.settings.shiftTypes) for (const v of r.slots[d + ':' + s.id].hard) hardList.push(v.msg);
+    for (const e of model.employees) for (const v of r.employees[e.id].hard) hardList.push(`${e.name}: ${v.msg}`);
+    const softList = [];
+    for (const e of model.employees) for (const v of r.employees[e.id].soft) if (['wishFri', 'wishVakt', 'wishShift', 'splitWeekend', 'singleNight', 'fairNights', 'fairWeekend'].includes(v.code)) softList.push(`${e.name}: ${v.msg}`);
+    for (let d = 0; d < c.days; d++) for (const s of model.settings.shiftTypes) for (const v of r.slots[d + ':' + s.id].soft) if (v.code !== 'preferWith') softList.push(v.msg);
+    const demandLine = key => model.settings.shiftTypes.map(s => { const dm = model.demand[key][s.id] || {}; const req = Object.entries(dm.tags || {}).filter(([, n]) => n).map(([t, n]) => `${n} ${t}`); if (dm.minK) req.push(`${dm.minK} kvinne${dm.minK > 1 ? 'r' : ''}`); if (dm.minM) req.push(`${dm.minM} ${dm.minM > 1 ? 'menn' : 'mann'}`); return `<li><b>${esc(s.name)}</b> ${s.start}–${s.end}: ${dm.min}–${dm.max || dm.min} på jobb${req.length ? ', minst ' + req.join(', ') : ''}</li>`; }).join('');
+    main.innerHTML = `
+      <div class="page-head"><div><h1>Regelrapport</h1><div class="sub">Til drøfting med tillitsvalgte (AML § 10-3) · ${esc(model.settings.unitName)} · ${esc(periodLabel())}</div></div>
+        <div class="toolbar no-print"><button class="btn btn-primary" id="btnPrintReport">Skriv ut</button></div></div>
+      <div class="panel"><h2>Konklusjon</h2>
+        ${r.hardCount === 0 ? `<p style="color:var(--ok)"><b>Turnusen går opp.</b> ${r.coverage.required} vakter er dekket, og ingen av reglene under er brutt for noen av de ${model.employees.length} ansatte.</p>` : `<p style="color:var(--danger)"><b>${r.hardCount} brudd må løses før turnusen kan godkjennes.</b> ${r.coverage.filled} av ${r.coverage.required} vakter er dekket.</p>`}
+        <p class="muted small">Rapporten er generert av Vaktflyt ${new Date().toLocaleString('nb-NO', { dateStyle: 'long', timeStyle: 'short' })} og erstatter ikke en vurdering av lov, tariff og lokale avtaler.</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel"><h2>Regler lagt til grunn</h2><ul style="margin:0;padding-left:18px;line-height:1.7">
+          <li>Gjennomsnittlig ukentlig arbeidstid: <b>${nb(R.avgWeeklyHours)} t</b> for 100 % (AML § 10-4)</li>
+          <li>Daglig hvile: <b>${nb(R.minRestHours)} t</b> sammenhengende (AML § 10-8 (1))</li>
+          <li>Ukentlig fri: <b>${nb(R.weeklyRestHours)} t</b> sammenhengende per 7 dager (AML § 10-8 (2))</li>
+          <li>Maks i én uke: <b>${nb(R.maxWeekHours)} t</b> (AML § 10-5)</li>
+          <li>Maks <b>${R.maxConsecutiveDays}</b> arbeidsdager og <b>${R.maxConsecutiveNights}</b> nattevakter på rad</li>
+          <li>Helg: hver <b>${R.weekendEvery}.</b> helg som standard${model.employees.some(e => e.weekendEvery) ? ' (individuelle avtaler: ' + model.employees.filter(e => e.weekendEvery).map(e => `${e.name.split(' ')[0]} hver ${e.weekendEvery}.`).join(', ') + ')' : ''}; natt fredag ${R.fridayNightIsWeekend !== false ? 'regnes' : 'regnes ikke'} som helg</li>
+        </ul></div>
+        <div class="panel"><h2>Bemanningskrav</h2><p class="small"><b>Hverdager</b></p><ul style="margin:0 0 8px;padding-left:18px">${demandLine('weekday')}</ul><p class="small"><b>Helg</b></p><ul style="margin:0;padding-left:18px">${demandLine('weekend')}</ul></div>
+      </div>
+      <div class="panel"><h2>Per ansatt</h2><table class="data"><thead><tr><th>Ansatt</th><th>Stilling</th><th>Timer planlagt / stilling</th><th>Avvik</th><th>Høyeste uke</th><th>Lengste periode (dager)</th><th>Netter</th><th>Helger</th><th>Brudd</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="panel"><h2>Brudd på regler</h2>${hardList.length ? `<ol style="margin:0;padding-left:18px">${hardList.map(m => `<li>${esc(m)}</li>`).join('')}</ol>` : '<p style="color:var(--ok)">Ingen.</p>'}</div>
+      ${model.dispensations.filter(x => dayIndex(x.date) >= 0 && dayIndex(x.date) < c.days).length ? `<div class="panel"><h2>Dispensasjoner gitt for enkeltvakter</h2><table class="data"><thead><tr><th>Vakt</th><th>Dispensasjon</th><th>Begrunnelse</th><th>Registrert</th></tr></thead><tbody>${model.dispensations.filter(x => dayIndex(x.date) >= 0 && dayIndex(x.date) < c.days).map(x => `<tr><td class="nowrap">${esc((shiftById(x.shift) || {}).name || x.shift)} ${VF.fmtDateWd(x.date)}</td><td>${esc(waiveLabel(x.what))}</td><td>${esc(x.note || '')}</td><td class="muted nowrap">${new Date(x.ts).toLocaleDateString('nb-NO')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      <div class="panel"><h2>Avvik fra ønsker og preferanser (${softList.length})</h2>${softList.length ? `<ul style="margin:0;padding-left:18px;columns:2;column-gap:24px" class="small">${softList.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="muted">Ingen.</p>'}</div>
+      <div class="panel"><h2>Endringer etter generering</h2>${model.changelog.filter(l => l.changes && l.changes.length).length ? `<ul style="margin:0;padding-left:18px" class="small">${model.changelog.filter(l => l.changes && l.changes.length).slice(0, 50).map(l => `<li><span class="muted">${new Date(l.ts).toLocaleDateString('nb-NO')}</span> ${esc(l.text)}</li>`).join('')}</ul>` : '<p class="muted">Ingen manuelle endringer.</p>'}</div>
+      <div class="panel" style="page-break-inside:avoid"><div class="grid-3" style="margin-top:24px">
+        <div><div style="border-top:1px solid var(--ink);padding-top:6px" class="small">Leder · dato</div></div>
+        <div><div style="border-top:1px solid var(--ink);padding-top:6px" class="small">Tillitsvalgt · dato</div></div>
+        <div><div style="border-top:1px solid var(--ink);padding-top:6px" class="small">Verneombud · dato</div></div>
+      </div></div>`;
+    $('#btnPrintReport').addEventListener('click', () => window.print());
+  }
+
   // ================================================================== FRAVÆR
   function viewFravaer(main) {
     const c = ctx();
@@ -753,7 +910,7 @@
       let inner = '';
       if (open) {
         const rep = VF.findReplacements(model, model.roster.asg, h.d, h.s, { swaps: true });
-        inner = `<div style="padding:6px 0 4px">${rep.candidates.slice(0, 8).map(cd => candidateHtml(cd, [])).join('') || '<p class="muted small">Ingen kan ta vakten uten å bryte regler. Vurder innleie eller å senke kravet for denne vakten.</p>'}${excludedHtml(rep.excluded)}</div>`;
+        inner = `<div style="padding:6px 0 4px">${waivedHtml(h.d, h.s)}${rep.candidates.slice(0, 8).map(cd => candidateHtml(cd, [])).join('')}${blockersHtml(rep)}${excludedHtml(rep.excluded)}</div>`;
       }
       return `<div style="padding:8px 0;border-bottom:1px solid var(--line-2)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
         <div><span class="chip chip-${h.s}">${h.s}</span> <b>${esc(st.name)} ${VF.fmtDateWd(h.iso)}</b> <span class="muted small">· ${esc(h.problems.map(p => p.replace(/^[^:]*: /, '')).join(' · '))}</span></div>
@@ -793,6 +950,7 @@
     });
     $$('[data-del-abs]', main).forEach(b => b.addEventListener('click', () => { model.absences = model.absences.filter(a => a.id !== b.dataset.delAbs); commit(); render(); }));
     $$('[data-hole]', main).forEach(b => b.addEventListener('click', () => { ui.repairOpen[b.dataset.hole] = !ui.repairOpen[b.dataset.hole]; viewFravaer(main); }));
+    bindWaivers(main);
     $$('.cand [data-choose]', main).forEach(b => b.addEventListener('click', () => {
       const changes = JSON.parse(b.closest('.cand').dataset.apply);
       pushUndo(); applyChanges(changes); logChange('Erstatter valgt: ' + describeChanges(changes), changes); commit(); render(); toast('Vakten er dekket.');
@@ -804,7 +962,9 @@
       model.roster.asg = res.asg;
       for (const l of res.log) logChange(`Automatisk: ${describeChanges(l.candidate.changes)} (${l.candidate.label})`, l.candidate.changes);
       commit(); render();
-      toast(res.unresolved.length ? `${res.log.length} vakter dekket, ${res.unresolved.length} kunne ikke løses lovlig.` : `${res.log.length} endringer gjort – alle vakter dekket.`);
+      for (const u of res.unresolved) ui.repairOpen[u.d + ':' + u.s] = true;
+      if (res.unresolved.length) render();
+      toast(res.unresolved.length ? `${res.log.length} vakter dekket, ${res.unresolved.length} kunne ikke løses lovlig – se hva som stopper.` : `${res.log.length} endringer gjort – alle vakter dekket.`);
     });
     $('#btnUndo2').addEventListener('click', undo);
   }
@@ -823,6 +983,7 @@
             <button class="btn" id="btnPrint" ${has ? '' : 'disabled'}>Skriv ut</button>
           </div>
           <p class="help">Utklippstavlen gir en tabell (ansatt × dato) som kan limes rett inn i Excel eller Gat. Koder: D/A/N = vakt, F = fri, FE = ferie, P = permisjon/kurs, S = syk.</p>
+          <p class="help">Til drøfting med tillitsvalgte: <button class="btn-link" id="btnToReport">åpne regelrapporten</button>.</p>
           ${has ? `<pre class="export">${esc(csv.split('\n').slice(0, 8).map(l => l.split(';').slice(0, 16).join('\t')).join('\n'))}\n…</pre>` : '<p class="muted">Lag en turnus først.</p>'}
         </div>
         <div class="panel"><h2>Sikkerhetskopi</h2>
@@ -830,6 +991,7 @@
           <div class="toolbar"><button class="btn" id="btnJson">Last ned sikkerhetskopi</button><label class="btn">Importer fil <input type="file" id="fileImport" accept=".json,application/json" class="hidden"></label></div>
         </div>
       </div>`;
+    $('#btnToReport').addEventListener('click', () => { ui.view = 'rapport'; render(); });
     if (has) {
       $('#btnCopy').addEventListener('click', async () => {
         const tsv = csv.split('\n').map(l => l.split(';').join('\t')).join('\n');

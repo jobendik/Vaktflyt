@@ -14,37 +14,37 @@
 
   function demoModel() {
     const employees = [
-      { id: 'e01', name: 'Kari Haugland', title: 'Teamleder / vernepleier', percent: 100, gender: 'K', tags: ['medikament', 'erfaren', 'teamleder'], shifts: DA, notes: 'Teamleder. Går ikke natt.' },
-      { id: 'e02', name: 'Per Nordvik', title: 'Miljøterapeut', percent: 100, gender: 'M', tags: ['erfaren'], shifts: DAN, preferWith: ['e06'] },
-      { id: 'e03', name: 'Amina Yusuf', title: 'Sykepleier', percent: 100, gender: 'K', tags: ['medikament', 'erfaren'], shifts: DAN },
-      { id: 'e04', name: 'Jonas Berge', title: 'Barnevernspedagog', percent: 100, gender: 'M', tags: ['erfaren'], shifts: DAN, preferWith: ['e13'] },
-      { id: 'e05', name: 'Ingrid Sæther', title: 'Vernepleier', percent: 80, gender: 'K', tags: ['medikament'], shifts: DAN },
-      { id: 'e06', name: 'Mats Lien', title: 'Miljøarbeider', percent: 100, gender: 'M', tags: [], shifts: DAN, preferWith: ['e02'] },
-      { id: 'e07', name: 'Sofie Dahl', title: 'Miljøterapeut', percent: 80, gender: 'K', tags: ['erfaren'], shifts: DA, blockedWeekdays: [2], notes: 'Studerer – kan ikke jobbe onsdager.' },
-      { id: 'e08', name: 'Tariq Hassan', title: 'Miljøterapeut', percent: 100, gender: 'M', tags: ['erfaren'], shifts: DAN, weekendEvery: 2, notes: 'Har avtalt å jobbe hver 2. helg.' },
+      { id: 'e01', name: 'Kari Haugland', title: 'Teamleder / vernepleier', percent: 100, gender: 'K', tags: ['medikament', 'erfaren', 'teamleder', 'utagering'], shifts: DA, notes: 'Teamleder. Går ikke natt.' },
+      { id: 'e02', name: 'Per Nordvik', title: 'Miljøterapeut', percent: 100, gender: 'M', tags: ['erfaren', 'utagering'], shifts: DAN, preferWith: ['e06'], avoidWith: ['e14'], notes: 'Går ikke så godt overens med Omar – begrens felles vakter.' },
+      { id: 'e03', name: 'Amina Yusuf', title: 'Sykepleier', percent: 100, gender: 'K', tags: ['medikament', 'erfaren', 'utagering'], shifts: DAN },
+      { id: 'e04', name: 'Jonas Berge', title: 'Barnevernspedagog', percent: 100, gender: 'M', tags: ['erfaren', 'utagering'], shifts: DAN, preferWith: ['e13'] },
+      { id: 'e05', name: 'Ingrid Sæther', title: 'Vernepleier', percent: 80, gender: 'K', tags: ['medikament', 'utagering'], shifts: DAN },
+      { id: 'e06', name: 'Mats Lien', title: 'Miljøarbeider', percent: 100, gender: 'M', tags: ['utagering'], shifts: DAN, preferWith: ['e02'] },
+      { id: 'e07', name: 'Sofie Dahl', title: 'Miljøterapeut', percent: 80, gender: 'K', tags: ['erfaren', 'utagering'], shifts: DA, blockedWeekdays: [2], notes: 'Studerer – kan ikke jobbe onsdager.' },
+      { id: 'e08', name: 'Tariq Hassan', title: 'Miljøterapeut', percent: 100, gender: 'M', tags: ['erfaren', 'utagering'], shifts: DAN, weekendEvery: 2, notes: 'Har avtalt å jobbe hver 2. helg.' },
       { id: 'e09', name: 'Linn Fosse', title: 'Sykepleier', percent: 60, gender: 'K', tags: ['medikament'], shifts: DAN, wantsExtra: true, weekendEvery: 2, notes: 'Ønsker ekstravakter og jobber hver 2. helg.' },
-      { id: 'e10', name: 'Erlend Moe', title: 'Miljøarbeider (natt)', percent: 75, gender: 'M', tags: ['erfaren'], shifts: N_ONLY, notes: 'Fast nattstilling.' },
-      { id: 'e11', name: 'Maria Solberg', title: 'Vernepleier', percent: 80, gender: 'K', tags: ['medikament', 'erfaren'], shifts: DAN, notWith: ['e12'] },
-      { id: 'e12', name: 'Håkon Vik', title: 'Miljøarbeider', percent: 60, gender: 'M', tags: [], shifts: DAN, notWith: ['e11'], wantsExtra: true },
-      { id: 'e13', name: 'Nora Eide', title: 'Barnevernspedagog', percent: 100, gender: 'K', tags: ['erfaren'], shifts: DAN, preferWith: ['e04'] },
-      { id: 'e14', name: 'Omar Khalil', title: 'Miljøterapeut', percent: 75, gender: 'M', tags: [], shifts: DAN, weekendEvery: 2, wantsExtra: true },
-      { id: 'e15', name: 'Silje Aas', title: 'Helgestilling (student)', percent: 20, gender: 'K', tags: [], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
-      { id: 'e16', name: 'Henrik Lund', title: 'Helgestilling', percent: 20, gender: 'M', tags: [], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
+      { id: 'e10', name: 'Erlend Moe', title: 'Miljøarbeider (natt)', percent: 75, gender: 'M', tags: ['erfaren', 'utagering'], shifts: N_ONLY, notes: 'Fast nattstilling.' },
+      { id: 'e11', name: 'Maria Solberg', title: 'Vernepleier', percent: 80, gender: 'K', tags: ['medikament', 'erfaren', 'utagering'], shifts: DAN, notWith: ['e12'] },
+      { id: 'e12', name: 'Håkon Vik', title: 'Miljøarbeider', percent: 60, gender: 'M', tags: ['utagering'], shifts: DAN, notWith: ['e11'], wantsExtra: true },
+      { id: 'e13', name: 'Nora Eide', title: 'Barnevernspedagog', percent: 100, gender: 'K', tags: ['erfaren', 'utagering'], shifts: DAN, preferWith: ['e04'], tagBreaks: [{ id: 'tb1', tag: 'utagering', from: '2026-11-16', to: '', note: 'Gravid – går ikke i utagering' }] },
+      { id: 'e14', name: 'Omar Khalil', title: 'Miljøterapeut', percent: 75, gender: 'M', tags: ['utagering'], shifts: DAN, weekendEvery: 2, wantsExtra: true, avoidWith: ['e02'] },
+      { id: 'e15', name: 'Silje Aas', title: 'Helgestilling (student)', percent: 20, gender: 'K', tags: ['utagering'], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
+      { id: 'e16', name: 'Henrik Lund', title: 'Helgestilling', percent: 20, gender: 'M', tags: ['utagering'], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
       { id: 'e17', name: 'Thea Nygård', title: 'Helgestilling (student)', percent: 20, gender: 'K', tags: [], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
-      { id: 'e18', name: 'Jakob Strand', title: 'Helgestilling (student)', percent: 20, gender: 'M', tags: [], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
+      { id: 'e18', name: 'Jakob Strand', title: 'Helgestilling (student)', percent: 20, gender: 'M', tags: ['utagering'], shifts: DAN, onlyWeekends: true, weekendEvery: 2 },
       { id: 'e19', name: 'Emma Bakke', title: 'Sykepleier (helgestilling)', percent: 20, gender: 'K', tags: ['medikament', 'erfaren'], shifts: DA, onlyWeekends: true, weekendEvery: 2 },
     ];
 
     const demand = {
       weekday: {
-        D: { min: 3, max: 4, tags: { erfaren: 1 }, minK: 0, minM: 0 },
-        A: { min: 3, max: 4, tags: { medikament: 1, erfaren: 1 }, minK: 0, minM: 0 },
-        N: { min: 2, max: 2, tags: {}, minK: 1, minM: 1 },
+        D: { min: 3, max: 4, tags: { erfaren: 1, utagering: 2 }, minK: 0, minM: 0, prefK: 0, prefM: 1 },
+        A: { min: 3, max: 4, tags: { medikament: 1, erfaren: 1, utagering: 2 }, minK: 0, minM: 0, prefK: 0, prefM: 1 },
+        N: { min: 2, max: 2, tags: { utagering: 1 }, minK: 1, minM: 1, prefK: 0, prefM: 0 },
       },
       weekend: {
-        D: { min: 2, max: 3, tags: { erfaren: 1 }, minK: 0, minM: 0 },
-        A: { min: 2, max: 3, tags: { medikament: 1 }, minK: 0, minM: 0 },
-        N: { min: 2, max: 2, tags: {}, minK: 1, minM: 1 },
+        D: { min: 2, max: 3, tags: { erfaren: 1, utagering: 1 }, minK: 0, minM: 0, prefK: 0, prefM: 1 },
+        A: { min: 2, max: 3, tags: { medikament: 1, utagering: 1 }, minK: 0, minM: 0, prefK: 0, prefM: 1 },
+        N: { min: 2, max: 2, tags: { utagering: 1 }, minK: 1, minM: 1, prefK: 0, prefM: 0 },
       },
     };
 
@@ -74,7 +74,7 @@
           { id: 'A', name: 'Kveld', start: '14:30', end: '22:00', color: '#E9825E' },
           { id: 'N', name: 'Natt', start: '21:45', end: '07:45', color: '#4A5BA6' },
         ],
-        tags: ['medikament', 'erfaren', 'teamleder'],
+        tags: ['medikament', 'erfaren', 'utagering', 'teamleder'],
       },
       rules: null,          // null = engine defaults
       employees,

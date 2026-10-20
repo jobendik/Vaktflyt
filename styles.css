@@ -10,9 +10,9 @@
   --muted: #6B7684;
   --line: #D7DDE4;
   --line-2: #E8ECF0;
-  --accent: #1F6F78;
-  --accent-2: #175860;
-  --accent-soft: #DCEFF0;
+  --accent: #1E3A6E;
+  --accent-2: #152B54;
+  --accent-soft: #E3EAF7;
   --on-accent: #FFFFFF;
   --danger: #B8322A;
   --danger-soft: #FBE5E3;
@@ -22,7 +22,7 @@
   --ok-soft: #DDF0E5;
   --shift-D: #F3C65B; --shift-D-ink: #3B2E00;
   --shift-A: #E9825E; --shift-A-ink: #3B1400;
-  --shift-N: #4A5BA6; --shift-N-ink: #FFFFFF;
+  --shift-N: #3B4F9E; --shift-N-ink: #FFFFFF;
   --ferie: #A9D7BE; --ferie-ink: #0E3B25;
   --syk: #F1B5B1; --syk-ink: #5B1511;
   --perm: #CFD6DE; --perm-ink: #2B3440;
@@ -36,9 +36,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #14181D; --surface: #1C2229; --surface-2: #232B34; --ink: #E7ECF1; --ink-2: #C2CAD3; --muted: #8F9AA6;
-    --line: #313B46; --line-2: #2A323B; --accent: #5BB7BF; --accent-2: #7BCBD1; --accent-soft: #1F3A3E; --on-accent: #0E1A1C;
+    --line: #313B46; --line-2: #2A323B; --accent: #8FB0F0; --accent-2: #A9C3F7; --accent-soft: #1E2C4A; --on-accent: #0B1324;
     --danger: #F08A82; --danger-soft: #3B1F1D; --warn: #E3B860; --warn-soft: #3A2E12; --ok: #7CCBA3; --ok-soft: #173327;
-    --shift-D: #D9AE3D; --shift-A: #D8704C; --shift-N: #6C7CC9; --shift-N-ink: #0D1120;
+    --shift-D: #D9AE3D; --shift-A: #D8704C; --shift-N: #6B7FD0; --shift-N-ink: #0D1120;
     --ferie: #3E7A5A; --ferie-ink: #DFF5E8; --syk: #8B3A35; --syk-ink: #FFE3E0; --perm: #3B4654; --perm-ink: #E2E8EF;
     color-scheme: dark;
   }
@@ -78,7 +78,7 @@ button { cursor: pointer; }
   padding: 32px 28px 24px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--shift-D) 0 34%, var(--shift-A) 34% 67%, var(--shift-N) 67%); flex: none; }
+.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--shift-D) 0 34%, var(--shift-A) 34% 67%, var(--accent) 67%); flex: none; }
 .brand-name { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 .login-card h1 { font-size: 24px; margin: 18px 0 4px; }
 .login-card .lead { color: var(--ink-2); margin-bottom: 20px; }
@@ -305,7 +305,9 @@ pre.export { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 1
 
 @media print {
   body { background: #fff; }
-  .sidebar, .page-head .toolbar, .inspector, .no-print, .panel.no-print { display: none !important; }
+  .sidebar, .page-head .toolbar, .inspector, .no-print, .panel.no-print, .toast { display: none !important; }
+  .panel { break-inside: avoid; border-color: #bbb; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
   #app { display: block; }
   .main { padding: 0; }
   .roster-scroll { max-height: none; overflow: visible; border: 0; }
