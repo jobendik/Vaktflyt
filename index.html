@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vaktflyt</title>
+  <meta name="description" content="Vaktflyt – turnus som går opp. Prototype for kriteriestyrt turnusplanlegging ved døgninstitusjoner.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231F6F78'/%3E%3Crect x='6' y='8' width='6' height='16' rx='2' fill='%23F3C65B'/%3E%3Crect x='13' y='8' width='6' height='16' rx='2' fill='%23E9825E'/%3E%3Crect x='20' y='8' width='6' height='16' rx='2' fill='%23B9C3F2'/%3E%3C/svg%3E">
+</head>
+<body>
+  <section id="login" class="hidden">
+    <form class="login-card" id="loginForm" autocomplete="off">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Vaktflyt</span></div>
+      <h1>Turnus som går opp.</h1>
+      <p class="lead">Du beskriver kriteriene. Vaktflyt legger kabalen – og legger den på nytt når noen blir syke.</p>
+      <div class="field"><label for="loginUser">Brukernavn</label><input id="loginUser" name="user" required></div>
+      <div class="field"><label for="loginPass">Passord</label><input id="loginPass" name="pass" type="password" required></div>
+      <p class="error hidden" id="loginError">Feil brukernavn eller passord.</p>
+      <button class="btn btn-primary btn-block" type="submit">Logg inn</button>
+      <div class="login-note">
+        Prototype. Demo-innlogging: <code>erik</code> / <code>vaktflyt</code>.
+        Alt du legger inn lagres bare i denne nettleseren – ingenting sendes til en server.
+      </div>
+    </form>
+  </section>
+
+  <div id="app" class="hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Vaktflyt</span></div>
+      <div class="unit" id="sideUnit"></div>
+      <nav class="nav" id="nav" aria-label="Hovedmeny">
+        <button data-view="oversikt">Oversikt</button>
+        <button data-view="ansatte">Ansatte <span class="badge" id="navAnsatte"></span></button>
+        <button data-view="bemanning">Bemanning</button>
+        <button data-view="regler">Regler</button>
+        <button data-view="turnus">Turnus <span class="badge" id="navTurnus"></span></button>
+        <button data-view="fravaer">Fravær og endringer <span class="badge" id="navFravaer"></span></button>
+        <button data-view="eksport">Eksport</button>
+      </nav>
+      <div class="spacer"></div>
+      <div class="foot">
+        <button class="btn btn-sm" id="btnReset">Nullstill til demodata</button>
+        <button class="btn btn-sm" id="btnLogout">Logg ut</button>
+      </div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+
+  <dialog id="dlg"><div id="dlgContent"></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="engine.js"></script>
+  <script src="demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
